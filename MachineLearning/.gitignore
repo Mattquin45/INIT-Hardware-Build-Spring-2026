@@ -1,0 +1,36 @@
+# Python
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+EGG-INFO/
+lib64/
+parts/
+var/
+wheels/
+*.whl
+.mypy_cache/
+.pytest_cache/
+.pytype/
+.coverage
+.nox/
+
+# Virtual environment
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Distribution / Packaging
+.Python
+build/
+develop-eggs/
+dist/
+# ... (see full GitHub template for complete list)
+
+poses/
