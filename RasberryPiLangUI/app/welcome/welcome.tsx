@@ -1,13 +1,27 @@
-import wave from "./Wave.png";
+import waveBottom from "./WaveTileBottom.png";
+import waveTop from "./WaveTileTop.png"
 
 export function Welcome() {
   return (
-    <div className="w-[180px] max-w-[10vn] p-7">
-      <img
-        src={wave}
-        alt="Wave"
-        className="block w-full dark:hidden"
-        />
-      </div>
+    <>
+      <div 
+        className = "fixed bottom-0 left-0 w-full h-[90px]"
+        style={{
+          backgroundImage: `url(${waveBottom})`, 
+          backgroundRepeat: 'repeat-x',
+          backgroundPosition: 'bottom',
+          backgroundSize: 'contain'
+        }}
+      />
+      <div 
+        className = "fixed top-0 left-0 w-full h-[90px]"
+        style={{
+          backgroundImage: `url(${waveBottom})`, 
+          backgroundRepeat: 'repeat-x',
+          backgroundPosition: 'bottom',
+          backgroundSize: 'contain'
+        }}
+      />
+    </>
   );
 }
