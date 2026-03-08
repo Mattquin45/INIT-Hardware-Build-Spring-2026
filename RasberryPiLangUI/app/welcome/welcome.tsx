@@ -16,7 +16,7 @@ export function Welcome() {
       <div 
         className = "fixed top-0 left-0 w-full h-[90px]"
         style={{
-          backgroundImage: `url(${waveBottom})`, 
+          backgroundImage: `url(${waveTop})`, 
           backgroundRepeat: 'repeat-x',
           backgroundPosition: 'bottom',
           backgroundSize: 'contain'
