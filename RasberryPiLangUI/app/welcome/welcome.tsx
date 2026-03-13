@@ -1,5 +1,6 @@
-import waveBottom from "./WaveTileBottom.png";
+import waveBottom from "./WaveTileBottom.png"
 import waveTop from "./WaveTileTop.png"
+import waves from "./Waves.png"
 
 export function Welcome() {
   return (
@@ -21,6 +22,15 @@ export function Welcome() {
           backgroundPosition: 'bottom',
           backgroundSize: 'contain'
         }}
+      />
+      <div
+      className = "grid h-screen w-full place-items-center"
+      style = {{
+        backgroundImage: `url(${waves})`,
+        backgroundRepeat: `repeat`,
+        backgroundPosition: 'bottom',
+        backgroundSize: 'auto'
+      }}
       />
     </>
   );
