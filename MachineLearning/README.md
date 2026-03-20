@@ -19,8 +19,6 @@ If you have a Windows System you run this command to create your virtual environ
 Install all the requirements for the project to run
 ```bash
 pip install opencv-python
-
-pip install mediapipe
 ```
 
 For development for this project, ensure to install the dependencies
