@@ -16,10 +16,6 @@ If you have a Windows System you run this command to create your virtual environ
 ```bash
 .\venv\Scripts\activate
 ```
-Install all the requirements for the project to run
-```bash
-pip install opencv-python
-```
 
 For development for this project, ensure to install the dependencies
 ```bash
