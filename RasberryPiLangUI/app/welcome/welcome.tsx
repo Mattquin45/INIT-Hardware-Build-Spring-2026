@@ -1,6 +1,7 @@
 import waveBottom from "./WaveTileBottom.png"
 import waveTop from "./WaveTileTop.png"
 import waves from "./Waves.png"
+import Scanner from '../Scanner/Scanner';
 
 export function Welcome() {
   return (
