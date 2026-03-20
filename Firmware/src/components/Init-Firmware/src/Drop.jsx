@@ -1,5 +1,5 @@
 import {useState} from "react";
-import "./Drop.css";
+import "./index.css";
 function Drop(){
 
     const[open, setOpen] = useState(false);
