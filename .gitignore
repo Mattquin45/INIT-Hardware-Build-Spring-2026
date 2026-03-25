@@ -16,6 +16,8 @@ wheels/
 .pytype/
 .coverage
 .nox/
+.DS_Store
+*.pt
 
 # Virtual environment
 .env
