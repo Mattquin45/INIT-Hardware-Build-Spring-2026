@@ -26,3 +26,4 @@ I saw errors starting from line 8 to line 34 in welcome.tsx after runing `git ch
 
 #### The solution:
 
+¯\_(ツ)_/¯ It went away on its own. I suppose that the linter lied to me.

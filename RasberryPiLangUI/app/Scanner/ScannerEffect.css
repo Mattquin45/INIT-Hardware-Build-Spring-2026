@@ -1,6 +1,6 @@
 @keyframes scanningAnim{
-    0%, 100% { top: 5%; opacity: 0.5; }
-    50% { top: 95%; opacity: 1; }
+    0%, 100% { top: 1%; opacity: 0.5; }
+    50% { top: 99%; opacity: 1; }
 }
 
 @keyframes pulseAnim{
@@ -24,12 +24,27 @@
     width: 100vw;
 }
 
+.scannerContainer.success{
+    background: rgba(119, 221, 119, 0.6);
+}
+
+.scannerContainer.failure{
+    background: rgba(255, 105, 97, 0.6);
+}
+
 .viewFinder{
     position: relative;
     width: 80%;
     height: 70%;
+    border: 2px solid rgba(0, 255, 204, 0.2);
+}
 
-    border: 1px solid rgba(0, 255, 204, 0.2);
+.scannerContainer.failure .viewFinder{
+    border: 2px solid rgba(255, 105, 97, 0.5);
+}
+
+.scannerContainer.success .viewFinder{
+    border: 2px sold rgba(119, 221, 119, 0.5);
 }
 
 .Corner{
@@ -38,6 +53,21 @@
     height: 15px;
     border: 2px solid #00ffcc;
     box-shadow: 0 0 10px #00ffcc;
+}
+
+.scannerContainer.success .Corner{
+    border: 2px solid #00ffcc;
+    box-shadow: 0 0 10px #00ffcc;
+}
+
+.scannerContainer.failure .Corner{
+    border: 2px solid #ff6961;
+    box-shadow: 0 0 10px #ff6961;
+}
+
+.scannerContainer.success .Corner{
+    border: 2px solid #77dd77;
+    box-shadow: 0 0 10px #77dd77;
 }
 
 .BottomLeft{ top: -2px; left: -2px; border-right: 0; border-bottom: 0; }
@@ -54,7 +84,7 @@
     height: 2px;
     background: #00ffcc;
     box-shadow: 0 0 15px #00ffcc;
-    animation: scanningAnim, 3s, infinite, ease-in-out;
+    animation: scanningAnim 3s ease-in-out infinite;
 }
 
 .pulsingDot{
@@ -64,4 +94,16 @@
     display: inline-block;
     margin-right: 10px;
     animation: pulseAnim 2s infinite;
+}
+
+.scannerContainer.failure .pulsingDot{
+    background: #ff6961;
+}
+
+.scannerContainer.success .pulsingDot{
+    background: #77dd77;
+}
+
+.scannerButton{
+    background-color: blue;
 }
