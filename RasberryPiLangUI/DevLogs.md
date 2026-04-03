@@ -18,7 +18,7 @@ hint: See the 'Note about fast-forwards' in 'git push --help' for details.
 I simply forced  the push. At the time I recording this issue, I now "miraculously" can push files to the branch with no issue at all.
 
 
-### The "Wall of Red" in welcome.tsx
+### The "Wall of Red" errors in welcome.tsx
 
 #### The problem:
 
@@ -26,4 +26,4 @@ I saw errors starting from line 8 to line 34 in welcome.tsx after runing `git ch
 
 #### The solution:
 
-¯\_(ツ)_/¯ It went away on its own. I suppose that the linter lied to me.
+It went away on its own. I suppose that the linter lied to me. Other than that, I had to wait for VS code to catch up.

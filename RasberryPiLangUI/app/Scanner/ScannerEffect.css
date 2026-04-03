@@ -44,18 +44,13 @@
 }
 
 .scannerContainer.success .viewFinder{
-    border: 2px sold rgba(119, 221, 119, 0.5);
+    border: 2px sold rgba(107, 182, 107, 0.5);
 }
 
 .Corner{
     position: absolute;
     width: 15px;
     height: 15px;
-    border: 2px solid #00ffcc;
-    box-shadow: 0 0 10px #00ffcc;
-}
-
-.scannerContainer.success .Corner{
     border: 2px solid #00ffcc;
     box-shadow: 0 0 10px #00ffcc;
 }
@@ -94,6 +89,7 @@
     display: inline-block;
     margin-right: 10px;
     animation: pulseAnim 2s infinite;
+    text-shadow: #77dd77;
 }
 
 .scannerContainer.failure .pulsingDot{
@@ -105,5 +101,17 @@
 }
 
 .scannerButton{
-    background-color: blue;
+    width: 9vw;
+    height: 10vh;
+    position: relative;
+    border-radius: 50%;
+    border-width: 5px;
+    background-color: rgba(0, 255, 204, 0.6);
+    border-color: rgba(138, 255, 232, 0.7);
+    z-index: 200;
+}
+
+.scannerButton:active{
+    background-color: rgba(0, 255, 204, 0.5);
+    border-color: rgba(138, 255, 232, 0.6);
 }

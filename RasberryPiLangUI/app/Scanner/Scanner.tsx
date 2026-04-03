@@ -14,7 +14,7 @@ const Scanner: React.FC<Scanning> = ({active, onFinish}) => {
 
     useEffect (() => {
         if(active){
-            setStatus("SCANNING");
+            setStatus("IDLE");
             setProgress(0);
         }
     }, [active]);
@@ -42,12 +42,12 @@ const Scanner: React.FC<Scanning> = ({active, onFinish}) => {
                 {status === "SCANNING" ? (
                     <div className = "scanningLine"/>
                 ) : (
-                    <div className = "result"/>
+                    <div/>
                 )}
                 
             </div>
 
-            <button className = "scannerButton"/>
+            <button className = "scannerButton" onClick={() => {setStatus("SCANNING");}}> </button>
 
             <div className = "scannerLabel">
                 {status === "SCANNING" ? (
@@ -56,7 +56,15 @@ const Scanner: React.FC<Scanning> = ({active, onFinish}) => {
                     </>
                 ) : (
                     <>
-                        <span className="pulsingDot"/>ANALYSIS COMPLETE...
+                        {status === "IDLE" ? (
+                            <>
+                                <span className="pulsingDot"/>WAITING FOR INPUT...
+                            </>
+                        ) : (
+                            <>
+                                <span className="pulsingDot"/>ANALYSIS COMPLETE...
+                            </>
+                        )}
                     </>
                 )}
                 
