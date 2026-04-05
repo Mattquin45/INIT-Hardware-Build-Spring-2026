@@ -94,3 +94,20 @@ html, body {
 }
 .switch input:checked + .slider { background-color: rgb(82, 140, 74); }
 .switch input:checked + .slider::before { transform: translateX(20px); }
+
+/* Floating animation */
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-28px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+.float {
+  animation: float 5.2s ease-in-out infinite;
+}
