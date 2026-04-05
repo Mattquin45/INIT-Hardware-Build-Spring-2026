@@ -4,7 +4,7 @@ import map from "./assets/Map.png";
 
 export default function Home() {
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-pink-50">
+    <div className="flex flex-col items-center justify-center h-screen">
 
       <h1 className="text-4xl font-bold mb-20 text-gray-700 -translate-y-16">
         
@@ -20,7 +20,7 @@ export default function Home() {
             shadow-xl
             float
             flex flex-col items-center justify-center
-            hover:scale-110 hover:shadow-red-300 hover:animate-bounce
+            hover:scale-110 hover:shadow-red-300 
             transition duration-300
           "
         >
@@ -39,7 +39,7 @@ export default function Home() {
             float
             -translate-y-32
             flex flex-col items-center justify-center
-            hover:scale-110 hover:shadow-red-300 hover:animate-bounce
+            hover:scale-110 hover:shadow-red-300 
             transition duration-300
           "
         >
@@ -57,7 +57,7 @@ export default function Home() {
             shadow-xl
             float
             flex flex-col items-center justify-center
-            hover:scale-110 hover:shadow-red-300 hover:animate-bounce
+            hover:scale-110 hover:shadow-red-300 
             transition duration-300
           "
         >
