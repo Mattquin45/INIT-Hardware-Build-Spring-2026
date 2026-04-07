@@ -271,4 +271,4 @@ wrapt==1.14.1
 xlrd==2.0.1
 XlsxWriter==3.2.0
 yarl==1.9.4
-zipp==3.18.1
+zipp==3.18.1google-cloud-translate==3.25.0
