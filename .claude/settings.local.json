@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(C:/Python314/python.exe -c ':*)"
+    ]
+  }
+}
