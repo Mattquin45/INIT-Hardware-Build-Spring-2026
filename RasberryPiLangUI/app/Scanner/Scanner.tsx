@@ -1,3 +1,4 @@
+import { resolve } from 'path';
 import './ScannerEffect.css'
 import { useState, useEffect } from "react";
 
@@ -8,9 +9,31 @@ interface Scanning{
 
 const Scanner: React.FC<Scanning> = ({active, onFinish}) => {
     const [status, setStatus] = useState< "IDLE" | "SCANNING" | "DONE" >("IDLE");
-    const [result, setResult] = useState<"SUCCESS" | "FAILURE" | null>(null) 
+    const [result, setResult] = useState<"SUCCESS" | "FAILURE" | "null" >("null") 
 
     if (!active) return null;
+
+    const aiResult = async () => {
+        try{
+            const aiResponse = await fetch('http://http://127.0.0.1:8000//confidence');
+            const aiData = await aiResponse.json();
+
+            return aiData.confidence >= 0.55 ? "SUCCESS" : "FAILURE";
+        } catch (error){
+            console.error("AI failed");
+            return "null";
+        }
+    }
+
+    const beginScan = async () => {
+        const promise = aiResult();
+        const delayResult = new Promise(resolve => setTimeout(resolve, 4000));
+
+        const [result] = await Promise.all([promise, delayResult]);
+
+        setResult(result);
+        setStatus("DONE");
+    }
 
     useEffect (() => {
         if(active){
@@ -21,16 +44,9 @@ const Scanner: React.FC<Scanning> = ({active, onFinish}) => {
     useEffect(() => {
         if (status !== "SCANNING") return;
 
-        const timer = setTimeout(() => {
-            const result = Math.random() > 0.5 ? "SUCCESS" : "FAILURE";
-            setResult(result);
-            setStatus("DONE");
-        }, 4000);
+        beginScan();
 
-        return () => clearTimeout(timer);
     }, [status, onFinish])
-
-    //Logic above is temporary until AI model is implemented.
 
     return(
         <div className = {`scannerContainer ${status === "DONE" ? `finished ${result?.toLowerCase()}` : ""}`}>
