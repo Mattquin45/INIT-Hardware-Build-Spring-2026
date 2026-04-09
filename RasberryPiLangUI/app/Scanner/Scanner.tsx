@@ -45,7 +45,7 @@ const Scanner: React.FC<Scanning> = ({active, onFinish}) => {
 
         beginScan();
 
-    }, [status, onFinish])
+    }, [status, onFinish]);
 
     return(
         <div className = {`scannerContainer ${status === "DONE" ? `finished ${result?.toLowerCase()}` : ""}`}>
