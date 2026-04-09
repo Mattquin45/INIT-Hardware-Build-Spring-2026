@@ -5,8 +5,8 @@ interface Scanning{
     active: boolean;
     onFinish?: (result: "SUCCESS" | "FAILURE") => void;
 }
+
 const Scanner: React.FC<Scanning> = ({active, onFinish}) => {
-    const [progress, setProgress] = useState(0);
     const [status, setStatus] = useState< "IDLE" | "SCANNING" | "DONE" >("IDLE");
     const [result, setResult] = useState<"SUCCESS" | "FAILURE" | null>(null) 
 
@@ -15,7 +15,6 @@ const Scanner: React.FC<Scanning> = ({active, onFinish}) => {
     useEffect (() => {
         if(active){
             setStatus("IDLE");
-            setProgress(0);
         }
     }, [active]);
 
@@ -30,6 +29,8 @@ const Scanner: React.FC<Scanning> = ({active, onFinish}) => {
 
         return () => clearTimeout(timer);
     }, [status, onFinish])
+
+    //Logic above is temporary until AI model is implemented.
 
     return(
         <div className = {`scannerContainer ${status === "DONE" ? `finished ${result?.toLowerCase()}` : ""}`}>
