@@ -15,7 +15,7 @@ const Scanner: React.FC<Scanning> = ({active, onFinish}) => {
 
     const aiResult = async () => {
         try{
-            const aiResponse = await fetch('http://http://127.0.0.1:8000//confidence');
+            const aiResponse = await fetch('http://http://127.0.0.1:8000/confidence');
             const aiData = await aiResponse.json();
 
             return aiData.confidence >= 0.55 ? "SUCCESS" : "FAILURE";
