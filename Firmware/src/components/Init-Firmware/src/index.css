@@ -14,9 +14,17 @@ html, body {
 }
 
 .dropdown {
-    max-height: 0;
+   position: absolute;
+    top: 110px;
+    right: 80px;
+    width: 70%;
+    font-family:'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+
+    max-height: 0;              /* closed */
     overflow: hidden;
+    overflow-y: auto;
     transition: max-height 0.55s ease;
+
     background: rgb(221, 144, 89);
 }
 .dropdown.active {
@@ -45,14 +53,7 @@ html, body {
     right: -25px; 
     z-index: 900; 
 }
-.dropdown {
-    position: absolute;
-    top: 110px;
-    right: 80px;
-    width: 50%;
-     font-family:'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif 
-                 
-}
+
 .setting-item {
     display: flex;
     align-items: center;

@@ -9,23 +9,19 @@ createRoot(document.getElementById('root')).render(
   <StrictMode>
     <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
       
-      {/* Background layer */}
       <Welcome />
-      
-      {/* Home sits on top of Welcome */}
+    
       <div style={{
         position: "absolute",
         top: 0,
         left: 0,
         width: "100%",
         height: "100%",
-        zIndex: 5          // above Welcome (z:0) but below Drop/waves (z:10)
+        zIndex: 5          
       }}>
         <Home />
       </div>
-
-      {/* Drop floats above everything */}
-      <Drop />
+=      <Drop />
 
     </div>
   </StrictMode>
