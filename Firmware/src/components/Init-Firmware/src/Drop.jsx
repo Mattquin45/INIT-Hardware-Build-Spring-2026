@@ -3,7 +3,7 @@ import "./index.css";
 
 const languages = {
   en: "English",
-    sp: "Spanish",
+    es: "Spanish",
     ja: "Japanese",
     fr: "French",
     zh: "Chinese",
@@ -33,7 +33,7 @@ function Drop() {
     const [settings, setSettings] = useState({
     online: false,
     en: false,
-    sp: false,
+    es: false,
   });
 
     function toggleMenu(){
