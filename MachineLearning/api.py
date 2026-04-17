@@ -1,3 +1,4 @@
+
 """
 api.py
 
@@ -19,17 +20,11 @@ Endpoints:
     POST /api/settings        Updates user settings
     POST /api/webcam/start    Starts the webcam tester with current language settings
     POST /api/webcam/stop     Stops the webcam tester (if running)
+    POST /api/scavenger/start Starts a new scavenger hunt game
+    GET /api/scavenger/status Gets current scavenger hunt status
+    POST /api/scavenger/stop  Stops the current scavenger hunt game
 """
 
-# import os
-# import cv2
-# from fastapi import FastAPI, HTTPException, Request
-# from fastapi.middleware.cors import CORSMiddleware
-# from ultralytics import YOLO
-# from fastapi.responses import JSONResponse
-# from pydantic import BaseModel
-# from typing import Dict, Optional, Any
-# from datetime import datetime
 
 import os
 import cv2
@@ -39,6 +34,8 @@ import signal
 import uuid
 import atexit
 import threading
+import random
+import time
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,10 +45,20 @@ from typing import Dict, Optional, Any
 from datetime import datetime
 from ultralytics import YOLO
 
-
+# Try to import Google Translate (optional)
+try:
+    from google.cloud import translate_v2 as translate_client_lib
+    TRANSLATE_AVAILABLE = True
+except ImportError:
+    TRANSLATE_AVAILABLE = False
+    print("⚠️ Google Cloud Translate not installed. Install with: pip install google-cloud-translate")
 
 MODEL_PATH = os.getenv("MODEL_PATH", "MachineLearning/yolov8n.pt")
 CAMERA_INDEX = int(os.getenv("CAMERA_INDEX", "0"))
+
+# Add at the top with other global variables
+camera = None
+camera_lock = threading.Lock()
 
 app = FastAPI()
 
@@ -86,9 +93,43 @@ LANGUAGES = {
     "fa": "Persian",
 }
 
+# YOLO's 80 built-in class names (yolov8n)
+YOLO_CLASSES = [
+    "person","bicycle","car","motorcycle","airplane","bus","train","truck","boat",
+    "traffic light","fire hydrant","stop sign","parking meter","bench","bird","cat",
+    "dog","horse","sheep","cow","elephant","bear","zebra","giraffe","backpack",
+    "umbrella","handbag","tie","suitcase","frisbee","skis","snowboard","sports ball",
+    "kite","baseball bat","baseball glove","skateboard","surfboard","tennis racket",
+    "bottle","wine glass","cup","fork","knife","spoon","bowl","banana","apple",
+    "sandwich","orange","broccoli","carrot","hot dog","pizza","donut","cake","chair",
+    "couch","potted plant","bed","dining table","toilet","tv","laptop","mouse",
+    "remote","keyboard","cell phone","microwave","oven","toaster","sink","refrigerator",
+    "book","clock","vase","scissors","teddy bear","hair drier","toothbrush"
+]
+
+# Initialize Google Translate client if available
+if TRANSLATE_AVAILABLE:
+    try:
+        translate_client = translate_client_lib.Client()
+        print("✅ Google Translate client initialized")
+    except Exception as e:
+        print(f"⚠️ Google Translate initialization failed: {e}")
+        translate_client = None
+else:
+    translate_client = None
+
 # Structure: { session_id: { target_language: str, settings: dict } }
 user_sessions = {}
 webcam_processes = {}
+
+# Global game state (one game at a time)
+game_state = {
+    "active": False,
+    "targets": [],        # [{"en": "cup", "translated": "taza", "found": False}]
+    "start_time": None,
+    "duration": 60,       # seconds
+    "language": "en",
+}
 
 # Pydantic models for request/response
 class LanguageUpdateRequest(BaseModel):
@@ -110,6 +151,10 @@ class WebcamStartRequest(BaseModel):
     session_id: Optional[str] = None
     model_path: Optional[str] = None
     conf_threshold: Optional[float] = 0.35
+
+class ScavengerStartRequest(BaseModel):
+    num_items: Optional[int] = 5
+    duration: Optional[int] = 60  # seconds
 
 def get_session_id(request: Request) -> str:
     """Get or create session ID from cookies or headers"""
@@ -135,6 +180,19 @@ def get_user_session(session_id: str) -> dict:
         }
     return user_sessions[session_id]
 
+def translate_word(word: str, lang: str) -> str:
+    """Translate a single word, return original if English or error."""
+    if lang == "en":
+        return word
+    if not translate_client:
+        return word
+    try:
+        result = translate_client.translate(word, target_language=lang)
+        return result["translatedText"]
+    except Exception as e:
+        print(f"Translation error for '{word}': {e}")
+        return word
+
 def _capture_frame():
     cap = cv2.VideoCapture(CAMERA_INDEX)
     if not cap.isOpened():
@@ -144,6 +202,41 @@ def _capture_frame():
     if not ret:
         raise RuntimeError("Failed to capture frame.")
     return frame
+
+def get_camera():
+    """Get or create a persistent camera instance"""
+    global camera
+    with camera_lock:
+        if camera is None or not camera.isOpened():
+            camera = cv2.VideoCapture(CAMERA_INDEX)
+            if not camera.isOpened():
+                raise RuntimeError(f"Cannot open camera index {CAMERA_INDEX}.")
+        return camera
+
+def release_camera():
+    """Release the camera when done"""
+    global camera
+    with camera_lock:
+        if camera is not None:
+            camera.release()
+            camera = None
+
+# Register cleanup on exit
+atexit.register(release_camera)
+
+# Then modify _capture_frame to use the persistent camera:
+def _capture_frame():
+    """Capture a frame using persistent camera connection"""
+    try:
+        cap = get_camera()
+        ret, frame = cap.read()
+        if not ret:
+            raise RuntimeError("Failed to capture frame.")
+        return frame
+    except Exception as e:
+        # If there's an error, try to reinitialize
+        release_camera()
+        raise e
 
 
 @app.get("/confidence")
@@ -162,72 +255,6 @@ def get_confidence():
                 best = val
 
     return {"confidence": best}
-
-# ============ Webcam Tester Endpoints ============
-# @app.post("/api/webcam/start")
-# async def start_webcam_tester(request: WebcamStartRequest, fastapi_request: Request):
-#     """Start the YOLO webcam tester with current language settings"""
-#     try:
-#         # Get session ID and user preferences
-#         session_id = get_session_id(fastapi_request)
-#         session = get_user_session(session_id)
-        
-#         # Check if webcam is already running for this session
-#         if session_id in webcam_processes and webcam_processes[session_id].poll() is None:
-#             return JSONResponse(
-#                 status_code=400,
-#                 content={
-#                     'success': False,
-#                     'message': 'Webcam tester is already running',
-#                     'session_id': session_id
-#                 }
-#             )
-        
-#         # Get current language from session
-#         target_language = session['target_language']
-#         language_name = LANGUAGES.get(target_language, "English")
-        
-#         # Path to the webcam tester script
-#         script_path = os.path.join(os.path.dirname(__file__), "webcam_tester_google.py")
-        
-#         if not os.path.exists(script_path):
-#             raise HTTPException(status_code=404, detail=f"Webcam tester script not found at {script_path}")
-        
-#         # Model path (use provided or default)
-#         model_path = request.model_path or "yolov8n.pt"
-#         conf_threshold = str(request.conf_threshold)
-        
-#         # Run the webcam tester as a subprocess
-#         # Note: This will open a separate window for the webcam feed
-#         process = subprocess.Popen(
-#             [
-#                 sys.executable,  # Use the same Python interpreter
-#                 script_path,
-#                 model_path,
-#                 "--conf", conf_threshold,
-#                 "--lang", target_language
-#             ],
-#             stdout=subprocess.PIPE,
-#             stderr=subprocess.PIPE,
-#             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == 'win32' else 0
-#         )
-        
-#         # Store the process
-#         webcam_processes[session_id] = process
-        
-#         return {
-#             'success': True,
-#             'message': f'Webcam tester started with language: {language_name}',
-#             'session_id': session_id,
-#             'target_language': target_language,
-#             'language_name': language_name,
-#             'model_path': model_path,
-#             'conf_threshold': request.conf_threshold,
-#             'timestamp': datetime.now().isoformat()
-#         }
-        
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/webcam/start")
 async def start_webcam_tester(request: WebcamStartRequest, fastapi_request: Request):
@@ -477,12 +504,97 @@ async def update_settings(request: SettingsUpdateRequest, fastapi_request: Reque
     
     return response
 
+# ============ Scavenger Hunt Endpoints ============
+
+@app.post("/api/scavenger/start")
+async def start_scavenger(request: ScavengerStartRequest, fastapi_request: Request):
+    """Start a new scavenger hunt game."""
+    session_id = get_session_id(fastapi_request)
+    session = get_user_session(session_id)
+    language = session["target_language"]
+
+    # Pick random objects
+    num_items = min(request.num_items, len(YOLO_CLASSES))
+    chosen = random.sample(YOLO_CLASSES, num_items)
+
+    # Translate them
+    targets = []
+    for word in chosen:
+        translated = translate_word(word, language)
+        targets.append({"en": word, "translated": translated, "found": False})
+
+    game_state["active"] = True
+    game_state["targets"] = targets
+    game_state["start_time"] = time.time()
+    game_state["duration"] = request.duration
+    game_state["language"] = language
+
+    return {
+        "success": True,
+        "targets": targets,
+        "duration": request.duration,
+        "language": language,
+    }
+
+@app.get("/api/scavenger/status")
+async def scavenger_status():
+    """Poll this every second from React to get current game state."""
+    if not game_state["active"]:
+        return {"active": False}
+
+    elapsed = time.time() - game_state["start_time"]
+    time_left = max(0, game_state["duration"] - elapsed)
+
+    # Run a quick inference frame to check for found objects
+    try:
+        frame = _capture_frame()
+        results = model(frame, conf=0.35, verbose=False)
+        detected = set()
+        for result in results:
+            for box in result.boxes:
+                label = result.names[int(box.cls[0])]
+                detected.add(label)
+
+        # Mark targets as found
+        for target in game_state["targets"]:
+            if target["en"] in detected:
+                target["found"] = True
+    except Exception as e:
+        print(f"Inference error in scavenger status: {e}")
+
+    all_found = all(t["found"] for t in game_state["targets"])
+    if time_left == 0 or all_found:
+        game_state["active"] = False
+
+    return {
+        "active": game_state["active"],
+        "targets": game_state["targets"],
+        "time_left": int(time_left),
+        "all_found": all_found,
+    }
+
+@app.post("/api/scavenger/stop")
+async def stop_scavenger():
+    """Stop the current game."""
+    game_state["active"] = False
+    return {"success": True}
+
+# Add an endpoint to release camera when game ends
+@app.post("/api/scavenger/stop")
+async def stop_scavenger():
+    """Stop the current game."""
+    global game_state
+    game_state["active"] = False
+    release_camera()  # Release camera when game stops
+    return {"success": True}
+
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint"""
     return {
         'status': 'healthy',
         'yolo_model_loaded': model is not None,
+        'translate_available': translate_client is not None,
         'timestamp': datetime.now().isoformat()
     }
 
