@@ -1,33 +1,10 @@
-
 """
-api.py
-
-FastAPI server that exposes YOLO model confidence to the React frontend.
-
-Usage:
-    uvicorn MachineLearning.api:app --reload
-
-Environment variables:
-    MODEL_PATH   Path to the .pt model file (default: MachineLearning/yolov8n.pt)
-    CAMERA_INDEX Webcam device index (default: 0)
-
-Endpoints:
-    GET /confidence  Returns the highest confidence score from a single inference frame.
-                     {"confidence": 0.87}  — or {"confidence": 0.0} if no detections.
-    GET /api/language         Returns current language settings
-    POST /api/language        Updates target language
-    GET /api/languages        Returns all available languages
-    POST /api/settings        Updates user settings
-    POST /api/webcam/start    Starts the webcam tester with current language settings
-    POST /api/webcam/stop     Stops the webcam tester (if running)
-    POST /api/scavenger/start Starts a new scavenger hunt game
-    GET /api/scavenger/status Gets current scavenger hunt status
-    POST /api/scavenger/stop  Stops the current scavenger hunt game
+api.py - Complete version with improved camera handling
 """
-
 
 import os
 import cv2
+import numpy as np
 import subprocess
 import sys
 import signal
@@ -36,6 +13,8 @@ import atexit
 import threading
 import random
 import time
+import numpy as np
+import base64
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -44,6 +23,12 @@ from pydantic import BaseModel
 from typing import Dict, Optional, Any
 from datetime import datetime
 from ultralytics import YOLO
+
+# Add at the top with other imports
+from scavenger_hunt import ScavengerHuntDetector
+
+# Add global detector variable
+scavenger_detector = None
 
 # Try to import Google Translate (optional)
 try:
@@ -56,15 +41,11 @@ except ImportError:
 MODEL_PATH = os.getenv("MODEL_PATH", "MachineLearning/yolov8n.pt")
 CAMERA_INDEX = int(os.getenv("CAMERA_INDEX", "0"))
 
-# Add at the top with other global variables
-camera = None
-camera_lock = threading.Lock()
-
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"], # Your React dev servers
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
@@ -95,16 +76,10 @@ LANGUAGES = {
 
 # YOLO's 80 built-in class names (yolov8n)
 YOLO_CLASSES = [
-    "person","bicycle","car","motorcycle","airplane","bus","train","truck","boat",
-    "traffic light","fire hydrant","stop sign","parking meter","bench","bird","cat",
-    "dog","horse","sheep","cow","elephant","bear","zebra","giraffe","backpack",
-    "umbrella","handbag","tie","suitcase","frisbee","skis","snowboard","sports ball",
-    "kite","baseball bat","baseball glove","skateboard","surfboard","tennis racket",
-    "bottle","wine glass","cup","fork","knife","spoon","bowl","banana","apple",
-    "sandwich","orange","broccoli","carrot","hot dog","pizza","donut","cake","chair",
-    "couch","potted plant","bed","dining table","toilet","tv","laptop","mouse",
-    "remote","keyboard","cell phone","microwave","oven","toaster","sink","refrigerator",
-    "book","clock","vase","scissors","teddy bear","hair drier","toothbrush"
+    "table", "chair", "whiteboard", "bookshelf", "clock", 
+    "wall-magazine", "trash-can", "eraser", "sharpener", "pen", 
+    "book", "ruler", "scissor", "fan", "laptop", 
+    "remote-control", "bag", "pants", "shoes", "hat"
 ]
 
 # Initialize Google Translate client if available
@@ -130,6 +105,12 @@ game_state = {
     "duration": 60,       # seconds
     "language": "en",
 }
+
+# Camera management
+camera = None
+camera_lock = threading.Lock()
+camera_last_used = None
+camera_timeout = 5  # Release camera after 5 seconds of inactivity
 
 # Pydantic models for request/response
 class LanguageUpdateRequest(BaseModel):
@@ -162,8 +143,6 @@ def get_session_id(request: Request) -> str:
     if not session_id:
         session_id = request.headers.get("X-Session-ID")
     if not session_id:
-        # Generate a simple session ID (you can use uuid in production)
-        import uuid
         session_id = str(uuid.uuid4())
     return session_id
 
@@ -193,56 +172,81 @@ def translate_word(word: str, lang: str) -> str:
         print(f"Translation error for '{word}': {e}")
         return word
 
-def _capture_frame():
-    cap = cv2.VideoCapture(CAMERA_INDEX)
-    if not cap.isOpened():
-        raise RuntimeError(f"Cannot open camera index {CAMERA_INDEX}.")
-    ret, frame = cap.read()
-    cap.release()
-    if not ret:
-        raise RuntimeError("Failed to capture frame.")
-    return frame
-
 def get_camera():
     """Get or create a persistent camera instance"""
-    global camera
+    global camera, camera_last_used
+    
     with camera_lock:
-        if camera is None or not camera.isOpened():
-            camera = cv2.VideoCapture(CAMERA_INDEX)
-            if not camera.isOpened():
-                raise RuntimeError(f"Cannot open camera index {CAMERA_INDEX}.")
+        # Check if we need to release old camera (timeout)
+        if camera_last_used and (time.time() - camera_last_used) > camera_timeout:
+            release_camera()
+        
+        # Create new camera if needed
+        if camera is None:
+            try:
+                # Try different camera indices if default fails
+                for idx in [CAMERA_INDEX, 0, 1, 2]:
+                    print(f"Attempting to open camera index {idx}...")
+                    cap = cv2.VideoCapture(idx)
+                    if cap.isOpened():
+                        camera = cap
+                        print(f"✅ Successfully opened camera index {idx}")
+                        break
+                    else:
+                        cap.release()
+                
+                if camera is None:
+                    raise RuntimeError(f"Cannot open any camera. Tried indices: {CAMERA_INDEX}, 0, 1, 2")
+                
+                # Set camera properties for better performance
+                camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Reduce buffer to get latest frame
+                
+            except Exception as e:
+                print(f"Error opening camera: {e}")
+                raise RuntimeError(f"Cannot open camera: {e}")
+        
+        camera_last_used = time.time()
         return camera
 
 def release_camera():
     """Release the camera when done"""
-    global camera
+    global camera, camera_last_used
     with camera_lock:
         if camera is not None:
             camera.release()
             camera = None
+            camera_last_used = None
+            print("📷 Camera released")
+
+def capture_frame_with_retry(max_retries=3):
+    """Capture a frame with retry logic"""
+    for attempt in range(max_retries):
+        try:
+            cap = get_camera()
+            ret, frame = cap.read()
+            if ret and frame is not None:
+                return frame
+            else:
+                print(f"Failed to capture frame, attempt {attempt + 1}/{max_retries}")
+                # Release and recreate camera on failure
+                release_camera()
+                time.sleep(0.5)
+        except Exception as e:
+            print(f"Error capturing frame (attempt {attempt + 1}): {e}")
+            release_camera()
+            time.sleep(0.5)
+    
+    raise RuntimeError("Failed to capture frame after multiple attempts")
 
 # Register cleanup on exit
 atexit.register(release_camera)
 
-# Then modify _capture_frame to use the persistent camera:
-def _capture_frame():
-    """Capture a frame using persistent camera connection"""
-    try:
-        cap = get_camera()
-        ret, frame = cap.read()
-        if not ret:
-            raise RuntimeError("Failed to capture frame.")
-        return frame
-    except Exception as e:
-        # If there's an error, try to reinitialize
-        release_camera()
-        raise e
-
-
 @app.get("/confidence")
 def get_confidence():
     try:
-        frame = _capture_frame()
+        frame = capture_frame_with_retry()
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
 
@@ -283,7 +287,7 @@ async def start_webcam_tester(request: WebcamStartRequest, fastapi_request: Requ
         current_dir = os.path.dirname(os.path.abspath(__file__))
         script_path = os.path.join(current_dir, "webcam_tester_google.py")
         
-        print(f"Looking for script at: {script_path}")  # Debug print
+        print(f"Looking for script at: {script_path}")
         
         if not os.path.exists(script_path):
             raise HTTPException(
@@ -302,11 +306,8 @@ async def start_webcam_tester(request: WebcamStartRequest, fastapi_request: Requ
         
         conf_threshold = str(request.conf_threshold)
         
-        print(f"🚀 Starting webcam tester:")
-        print(f"   Script: {script_path}")
-        print(f"   Model: {model_path}")
-        print(f"   Language: {target_language}")
-        print(f"   Python: {sys.executable}")
+        # Release our camera before starting subprocess
+        release_camera()
         
         # Run the webcam tester as a subprocess
         cmd = [
@@ -317,7 +318,7 @@ async def start_webcam_tester(request: WebcamStartRequest, fastapi_request: Requ
             "--lang", target_language
         ]
         
-        print(f"   Command: {' '.join(cmd)}")
+        print(f"🚀 Starting webcam tester: {' '.join(cmd)}")
         
         # Start the process
         process = subprocess.Popen(
@@ -327,16 +328,12 @@ async def start_webcam_tester(request: WebcamStartRequest, fastapi_request: Requ
             text=True
         )
         
-        # Store the process
         webcam_processes[session_id] = process
         
-        # Give it a moment to start
         import asyncio
         await asyncio.sleep(1)
         
-        # Check if process is still running
         if process.poll() is not None:
-            # Process died, read error
             stdout, stderr = process.communicate()
             error_msg = f"Process died immediately. stderr: {stderr}, stdout: {stdout}"
             print(error_msg)
@@ -373,23 +370,19 @@ async def stop_webcam_tester(fastapi_request: Request):
     
     process = webcam_processes[session_id]
     
-    if process.poll() is None:  # Process is still running
+    if process.poll() is None:
         try:
-            # Try to terminate gracefully
             if sys.platform == 'win32':
                 process.terminate()
             else:
-                process.send_signal(signal.SIGINT)  # Simulate Ctrl+C
+                process.send_signal(signal.SIGINT)
             
-            # Wait for process to terminate
             process.wait(timeout=5)
             
         except subprocess.TimeoutExpired:
-            # Force kill if not responding
             process.kill()
             process.wait()
         
-        # Remove from tracking
         del webcam_processes[session_id]
         
         return {
@@ -399,7 +392,6 @@ async def stop_webcam_tester(fastapi_request: Request):
             'timestamp': datetime.now().isoformat()
         }
     else:
-        # Process already ended
         del webcam_processes[session_id]
         return {
             'success': True,
@@ -439,7 +431,6 @@ async def get_language(request: Request):
         'timestamp': datetime.now().isoformat()
     }
     
-    # Create response with session cookie
     response = JSONResponse(content=response_data)
     response.set_cookie(key="session_id", value=session_id, httponly=False, max_age=3600*24*30)
     
@@ -451,17 +442,14 @@ async def update_language(request: LanguageUpdateRequest, fastapi_request: Reque
     session_id = get_session_id(fastapi_request)
     session = get_user_session(session_id)
     
-    # Validate language
     if request.targetLanguage not in LANGUAGES:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid language: {request.targetLanguage}"
         )
     
-    # Update language
     session['target_language'] = request.targetLanguage
     
-    # Update settings if provided
     if request.settings:
         session['settings'].update(request.settings)
     
@@ -509,10 +497,17 @@ async def update_settings(request: SettingsUpdateRequest, fastapi_request: Reque
 @app.post("/api/scavenger/start")
 async def start_scavenger(request: ScavengerStartRequest, fastapi_request: Request):
     """Start a new scavenger hunt game."""
+    global scavenger_detector
+    
     session_id = get_session_id(fastapi_request)
     session = get_user_session(session_id)
     language = session["target_language"]
 
+    # Stop any existing detector
+    if scavenger_detector:
+        scavenger_detector.stop_detection()
+        scavenger_detector = None
+    
     # Pick random objects
     num_items = min(request.num_items, len(YOLO_CLASSES))
     chosen = random.sample(YOLO_CLASSES, num_items)
@@ -523,11 +518,60 @@ async def start_scavenger(request: ScavengerStartRequest, fastapi_request: Reque
         translated = translate_word(word, language)
         targets.append({"en": word, "translated": translated, "found": False})
 
+    # Initialize game state
     game_state["active"] = True
     game_state["targets"] = targets
     game_state["start_time"] = time.time()
     game_state["duration"] = request.duration
     game_state["language"] = language
+    
+    # Start the detector in background with display window
+    try:
+        model_path = os.path.join(os.path.dirname(__file__), "best.onnx")
+        if not os.path.exists(model_path):
+            model_path = "yolov8n.pt"
+        
+        from scavenger_hunt import ScavengerHuntDetector
+        scavenger_detector = ScavengerHuntDetector(
+            model_path=model_path,
+            target_language=language,
+            conf=0.35,
+            camera_index=CAMERA_INDEX
+        )
+        
+        # Define callback to update game state when objects are found
+        def detection_callback(detections):
+            if not game_state["active"]:
+                return
+            
+            # Check each detection against targets
+            updated = False
+            for detection in detections:
+                for target in game_state["targets"]:
+                    if not target["found"] and target["en"].lower() == detection["label_en"].lower():
+                        target["found"] = True
+                        updated = True
+                        print(f"🎉 Found {target['en']} ({target['translated']})!")
+                        
+                        # Check if all found
+                        if all(t["found"] for t in game_state["targets"]):
+                            print("🎉🎉🎉 ALL ITEMS FOUND! 🎉🎉🎉")
+                            game_state["active"] = False
+                            # Stop detector after a delay
+                            threading.Timer(2.0, lambda: scavenger_detector.stop_detection() if scavenger_detector else None).start()
+            
+            # If game ended, stop detector
+            if not game_state["active"] and scavenger_detector:
+                scavenger_detector.stop_detection()
+        
+        # Start detection with targets
+        scavenger_detector.start_detection(targets, detection_callback)
+        
+    except Exception as e:
+        print(f"Error starting detector: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
 
     return {
         "success": True,
@@ -536,33 +580,18 @@ async def start_scavenger(request: ScavengerStartRequest, fastapi_request: Reque
         "language": language,
     }
 
+
 @app.get("/api/scavenger/status")
 async def scavenger_status():
     """Poll this every second from React to get current game state."""
     if not game_state["active"]:
-        return {"active": False}
+        return {"active": False, "time_left": 0, "targets": game_state["targets"], "all_found": False}
 
     elapsed = time.time() - game_state["start_time"]
     time_left = max(0, game_state["duration"] - elapsed)
-
-    # Run a quick inference frame to check for found objects
-    try:
-        frame = _capture_frame()
-        results = model(frame, conf=0.35, verbose=False)
-        detected = set()
-        for result in results:
-            for box in result.boxes:
-                label = result.names[int(box.cls[0])]
-                detected.add(label)
-
-        # Mark targets as found
-        for target in game_state["targets"]:
-            if target["en"] in detected:
-                target["found"] = True
-    except Exception as e:
-        print(f"Inference error in scavenger status: {e}")
-
+    
     all_found = all(t["found"] for t in game_state["targets"])
+    
     if time_left == 0 or all_found:
         game_state["active"] = False
 
@@ -573,20 +602,82 @@ async def scavenger_status():
         "all_found": all_found,
     }
 
+# Update stop_scavenger endpoint
 @app.post("/api/scavenger/stop")
 async def stop_scavenger():
     """Stop the current game."""
+    global scavenger_detector
+    
     game_state["active"] = False
-    return {"success": True}
+    
+    if scavenger_detector:
+        scavenger_detector.stop_detection()
+        scavenger_detector = None
+    
+    release_camera()
+    return {"success": True} 
 
-# Add an endpoint to release camera when game ends
-@app.post("/api/scavenger/stop")
-async def stop_scavenger():
-    """Stop the current game."""
-    global game_state
-    game_state["active"] = False
-    release_camera()  # Release camera when game stops
-    return {"success": True}
+
+@app.post("/api/detect")
+async def detect_objects(request: Request):
+    """Detect objects in uploaded image"""
+    try:
+        # Read uploaded image
+        form = await request.form()
+        image_file = form.get("image")
+        
+        if not image_file:
+            return {"objects": []}
+        
+        # Read image file
+        contents = await image_file.read()
+        
+        # Convert to numpy array
+        nparr = np.frombuffer(contents, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if img is None:
+            return {"objects": []}
+        
+        # Run inference
+        results = model(img, conf=0.35, verbose=False)
+        
+        # Parse detections
+        detections = []
+        for result in results:
+            if result.boxes is not None:
+                for box in result.boxes:
+                    x1, y1, x2, y2 = box.xyxy[0].tolist()
+                    conf = float(box.conf[0])
+                    cls = int(box.cls[0])
+                    label = result.names[cls]
+                    
+                    detections.append({
+                        "label": label,
+                        "confidence": conf,
+                        "bbox": [int(x1), int(y1), int(x2 - x1), int(y2 - y1)]
+                    })
+        
+        return {"objects": detections}
+        
+    except Exception as e:
+        print(f"Detection error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"objects": []}
+
+@app.post("/api/scavenger/update")
+async def update_scavenger(request: Request):
+    """Update targets from frontend"""
+    try:
+        data = await request.json()
+        if "targets" in data:
+            game_state["targets"] = data["targets"]
+        return {"success": True}
+    except Exception as e:
+        print(f"Update error: {e}")
+        return {"success": False}
+    
 
 @app.get("/api/health")
 async def health_check():
@@ -595,6 +686,7 @@ async def health_check():
         'status': 'healthy',
         'yolo_model_loaded': model is not None,
         'translate_available': translate_client is not None,
+        'camera_available': camera is not None and camera.isOpened() if camera else False,
         'timestamp': datetime.now().isoformat()
     }
 
