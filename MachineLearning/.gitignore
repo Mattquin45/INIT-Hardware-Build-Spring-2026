@@ -33,4 +33,10 @@ develop-eggs/
 dist/
 # ... (see full GitHub template for complete list)
 
-poses/
+# Model files
+best.onnx
+yolov8n.pt
+MachineLearning/
+
+# API Keys
+keys/
