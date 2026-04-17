@@ -17,17 +17,37 @@ Endpoints:
     POST /api/language        Updates target language
     GET /api/languages        Returns all available languages
     POST /api/settings        Updates user settings
+    POST /api/webcam/start    Starts the webcam tester with current language settings
+    POST /api/webcam/stop     Stops the webcam tester (if running)
 """
+
+# import os
+# import cv2
+# from fastapi import FastAPI, HTTPException, Request
+# from fastapi.middleware.cors import CORSMiddleware
+# from ultralytics import YOLO
+# from fastapi.responses import JSONResponse
+# from pydantic import BaseModel
+# from typing import Dict, Optional, Any
+# from datetime import datetime
 
 import os
 import cv2
+import subprocess
+import sys
+import signal
+import uuid
+import atexit
+import threading
+from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from ultralytics import YOLO
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Dict, Optional, Any
 from datetime import datetime
+from ultralytics import YOLO
+
 
 
 MODEL_PATH = os.getenv("MODEL_PATH", "MachineLearning/yolov8n.pt")
@@ -68,6 +88,7 @@ LANGUAGES = {
 
 # Structure: { session_id: { target_language: str, settings: dict } }
 user_sessions = {}
+webcam_processes = {}
 
 # Pydantic models for request/response
 class LanguageUpdateRequest(BaseModel):
@@ -84,6 +105,11 @@ class LanguageResponse(BaseModel):
     settings: Optional[Dict[str, bool]] = None
     message: str
     timestamp: str
+
+class WebcamStartRequest(BaseModel):
+    session_id: Optional[str] = None
+    model_path: Optional[str] = None
+    conf_threshold: Optional[float] = 0.35
 
 def get_session_id(request: Request) -> str:
     """Get or create session ID from cookies or headers"""
@@ -108,6 +134,7 @@ def get_user_session(session_id: str) -> dict:
             }
         }
     return user_sessions[session_id]
+
 def _capture_frame():
     cap = cv2.VideoCapture(CAMERA_INDEX)
     if not cap.isOpened():
@@ -135,6 +162,138 @@ def get_confidence():
                 best = val
 
     return {"confidence": best}
+
+# ============ Webcam Tester Endpoints ============
+@app.post("/api/webcam/start")
+async def start_webcam_tester(request: WebcamStartRequest, fastapi_request: Request):
+    """Start the YOLO webcam tester with current language settings"""
+    try:
+        # Get session ID and user preferences
+        session_id = get_session_id(fastapi_request)
+        session = get_user_session(session_id)
+        
+        # Check if webcam is already running for this session
+        if session_id in webcam_processes and webcam_processes[session_id].poll() is None:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    'success': False,
+                    'message': 'Webcam tester is already running',
+                    'session_id': session_id
+                }
+            )
+        
+        # Get current language from session
+        target_language = session['target_language']
+        language_name = LANGUAGES.get(target_language, "English")
+        
+        # Path to the webcam tester script
+        script_path = os.path.join(os.path.dirname(__file__), "webcam_tester_google.py")
+        
+        if not os.path.exists(script_path):
+            raise HTTPException(status_code=404, detail=f"Webcam tester script not found at {script_path}")
+        
+        # Model path (use provided or default)
+        model_path = request.model_path or "yolov8n.pt"
+        conf_threshold = str(request.conf_threshold)
+        
+        # Run the webcam tester as a subprocess
+        # Note: This will open a separate window for the webcam feed
+        process = subprocess.Popen(
+            [
+                sys.executable,  # Use the same Python interpreter
+                script_path,
+                model_path,
+                "--conf", conf_threshold,
+                "--lang", target_language
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == 'win32' else 0
+        )
+        
+        # Store the process
+        webcam_processes[session_id] = process
+        
+        return {
+            'success': True,
+            'message': f'Webcam tester started with language: {language_name}',
+            'session_id': session_id,
+            'target_language': target_language,
+            'language_name': language_name,
+            'model_path': model_path,
+            'conf_threshold': request.conf_threshold,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/webcam/stop")
+async def stop_webcam_tester(fastapi_request: Request):
+    """Stop the running webcam tester"""
+    session_id = get_session_id(fastapi_request)
+    
+    if session_id not in webcam_processes:
+        return JSONResponse(
+            status_code=404,
+            content={
+                'success': False,
+                'message': 'No webcam tester running for this session'
+            }
+        )
+    
+    process = webcam_processes[session_id]
+    
+    if process.poll() is None:  # Process is still running
+        try:
+            # Try to terminate gracefully
+            if sys.platform == 'win32':
+                process.terminate()
+            else:
+                process.send_signal(signal.SIGINT)  # Simulate Ctrl+C
+            
+            # Wait for process to terminate
+            process.wait(timeout=5)
+            
+        except subprocess.TimeoutExpired:
+            # Force kill if not responding
+            process.kill()
+            process.wait()
+        
+        # Remove from tracking
+        del webcam_processes[session_id]
+        
+        return {
+            'success': True,
+            'message': 'Webcam tester stopped successfully',
+            'session_id': session_id,
+            'timestamp': datetime.now().isoformat()
+        }
+    else:
+        # Process already ended
+        del webcam_processes[session_id]
+        return {
+            'success': True,
+            'message': 'Webcam tester was not running',
+            'session_id': session_id
+        }
+
+@app.get("/api/webcam/status")
+async def get_webcam_status(fastapi_request: Request):
+    """Check if webcam tester is running"""
+    session_id = get_session_id(fastapi_request)
+    
+    is_running = False
+    if session_id in webcam_processes:
+        process = webcam_processes[session_id]
+        is_running = process.poll() is None
+    
+    return {
+        'running': is_running,
+        'session_id': session_id,
+        'timestamp': datetime.now().isoformat()
+    }
 
 # ============ Language Management Endpoints ============
 @app.get("/api/language")

@@ -12,6 +12,7 @@ In the command line, run the following commands:
 
 ```bash
 python -m venv venv (you may need to use python3 instead if you are using python3)
+python3.12 -m venv venv
 ```
 If you have a Mac/Linus System you run this command to create your virtual environment
 ```bash
