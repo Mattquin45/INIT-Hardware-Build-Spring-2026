@@ -164,6 +164,71 @@ def get_confidence():
     return {"confidence": best}
 
 # ============ Webcam Tester Endpoints ============
+# @app.post("/api/webcam/start")
+# async def start_webcam_tester(request: WebcamStartRequest, fastapi_request: Request):
+#     """Start the YOLO webcam tester with current language settings"""
+#     try:
+#         # Get session ID and user preferences
+#         session_id = get_session_id(fastapi_request)
+#         session = get_user_session(session_id)
+        
+#         # Check if webcam is already running for this session
+#         if session_id in webcam_processes and webcam_processes[session_id].poll() is None:
+#             return JSONResponse(
+#                 status_code=400,
+#                 content={
+#                     'success': False,
+#                     'message': 'Webcam tester is already running',
+#                     'session_id': session_id
+#                 }
+#             )
+        
+#         # Get current language from session
+#         target_language = session['target_language']
+#         language_name = LANGUAGES.get(target_language, "English")
+        
+#         # Path to the webcam tester script
+#         script_path = os.path.join(os.path.dirname(__file__), "webcam_tester_google.py")
+        
+#         if not os.path.exists(script_path):
+#             raise HTTPException(status_code=404, detail=f"Webcam tester script not found at {script_path}")
+        
+#         # Model path (use provided or default)
+#         model_path = request.model_path or "yolov8n.pt"
+#         conf_threshold = str(request.conf_threshold)
+        
+#         # Run the webcam tester as a subprocess
+#         # Note: This will open a separate window for the webcam feed
+#         process = subprocess.Popen(
+#             [
+#                 sys.executable,  # Use the same Python interpreter
+#                 script_path,
+#                 model_path,
+#                 "--conf", conf_threshold,
+#                 "--lang", target_language
+#             ],
+#             stdout=subprocess.PIPE,
+#             stderr=subprocess.PIPE,
+#             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == 'win32' else 0
+#         )
+        
+#         # Store the process
+#         webcam_processes[session_id] = process
+        
+#         return {
+#             'success': True,
+#             'message': f'Webcam tester started with language: {language_name}',
+#             'session_id': session_id,
+#             'target_language': target_language,
+#             'language_name': language_name,
+#             'model_path': model_path,
+#             'conf_threshold': request.conf_threshold,
+#             'timestamp': datetime.now().isoformat()
+#         }
+        
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/webcam/start")
 async def start_webcam_tester(request: WebcamStartRequest, fastapi_request: Request):
     """Start the YOLO webcam tester with current language settings"""
@@ -187,33 +252,68 @@ async def start_webcam_tester(request: WebcamStartRequest, fastapi_request: Requ
         target_language = session['target_language']
         language_name = LANGUAGES.get(target_language, "English")
         
-        # Path to the webcam tester script
-        script_path = os.path.join(os.path.dirname(__file__), "webcam_tester_google.py")
+        # Get the directory where api.py is located
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        script_path = os.path.join(current_dir, "webcam_tester_google.py")
+        
+        print(f"Looking for script at: {script_path}")  # Debug print
         
         if not os.path.exists(script_path):
-            raise HTTPException(status_code=404, detail=f"Webcam tester script not found at {script_path}")
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Webcam tester script not found at {script_path}"
+            )
         
-        # Model path (use provided or default)
-        model_path = request.model_path or "yolov8n.pt"
+        # Model path - use best.onnx if it exists
+        model_path = request.model_path
+        if not model_path:
+            best_onnx = os.path.join(current_dir, "best.onnx")
+            if os.path.exists(best_onnx):
+                model_path = best_onnx
+            else:
+                model_path = "yolov8n.pt"
+        
         conf_threshold = str(request.conf_threshold)
         
+        print(f"🚀 Starting webcam tester:")
+        print(f"   Script: {script_path}")
+        print(f"   Model: {model_path}")
+        print(f"   Language: {target_language}")
+        print(f"   Python: {sys.executable}")
+        
         # Run the webcam tester as a subprocess
-        # Note: This will open a separate window for the webcam feed
+        cmd = [
+            sys.executable,
+            script_path,
+            model_path,
+            "--conf", conf_threshold,
+            "--lang", target_language
+        ]
+        
+        print(f"   Command: {' '.join(cmd)}")
+        
+        # Start the process
         process = subprocess.Popen(
-            [
-                sys.executable,  # Use the same Python interpreter
-                script_path,
-                model_path,
-                "--conf", conf_threshold,
-                "--lang", target_language
-            ],
+            cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == 'win32' else 0
+            text=True
         )
         
         # Store the process
         webcam_processes[session_id] = process
+        
+        # Give it a moment to start
+        import asyncio
+        await asyncio.sleep(1)
+        
+        # Check if process is still running
+        if process.poll() is not None:
+            # Process died, read error
+            stdout, stderr = process.communicate()
+            error_msg = f"Process died immediately. stderr: {stderr}, stdout: {stdout}"
+            print(error_msg)
+            raise HTTPException(status_code=500, detail=error_msg)
         
         return {
             'success': True,
@@ -227,6 +327,7 @@ async def start_webcam_tester(request: WebcamStartRequest, fastapi_request: Requ
         }
         
     except Exception as e:
+        print(f"❌ Error starting webcam: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/webcam/stop")

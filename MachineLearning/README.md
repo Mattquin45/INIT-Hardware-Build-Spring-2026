@@ -6,13 +6,13 @@ In the terminal, make sure you are in the Machine Learning Folder:
 cd /Documents/Github/INIT-Hardware-Build-Spring-2026/MachineLearning
 ``` 
 
+
 Using a virtual environment:
 
 In the command line, run the following commands:
 
 ```bash
-python -m venv venv (you may need to use python3 instead if you are using python3)
-python3.12 -m venv venv
+python3 -m venv venv 
 ```
 If you have a Mac/Linus System you run this command to create your virtual environment
 ```bash
@@ -32,4 +32,27 @@ pip install -r requirements.txt
 How to run the server
 ```bash
 uvicorn api:app --reload --host 0.0.0.0 --port 8000
+```
+
+
+
+For creating a conda virtual environment
+```bash
+conda create -n init_project python=3.11 -y
+
+conda activate init_project
+
+pip install opencv-python ultralytics numpy google-cloud-translate fastapi uvicorn
+```
+
+to deactivate this virtual environment
+```bash
+conda  deactivate 
+```
+
+In the terminal for running the firmware
+```bash
+cd INIT-Hardware-Build-Spring-2026/Firmware/src/components/Init-Firmware
+npm install
+npm run dev
 ```
