@@ -4,10 +4,10 @@ import "./index.css";
 const languages = {
   en: "English",
     es: "Spanish",
-    ja: "Japanese",
+    // ja: "Japanese",
     fr: "French",
-    zh: "Chinese",
-    ko: "Korean",
+    // zh: "Chinese",
+    // ko: "Korean",
     it: "Italian",
     de: "German",
     el: "Greek",

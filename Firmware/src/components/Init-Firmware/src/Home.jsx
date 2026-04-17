@@ -115,7 +115,7 @@ export default function Home() {
           </span>
         </button>
 
-        <button
+        {/* <button
           onClick={() => alert("APPPP NUMBER TWOOO 🥔")}
           className="
             w-60 h-60 rounded-full
@@ -132,25 +132,8 @@ export default function Home() {
           <span className="text-xl font-semibold text-gray-700">
             Potato Caliente
           </span>
-        </button>
-
-        {/* <button
-          onClick={() => alert("THREEE scavenger hunt 🐣")}
-          className="
-            w-60 h-60 rounded-full
-            bg-gradient-to-br from-blue-100 to-blue-600
-            shadow-xl
-            float
-            flex flex-col items-center justify-center
-            hover:scale-110 hover:shadow-red-300 
-            transition duration-300
-          "
-        >
-          <img src={map} className="w-32 h-32 mb-3" />
-          <span className="text-xl font-semibold text-gray-700">
-            Dora's map
-          </span>
         </button> */}
+
         <button
           onClick={() => setShowDorasMap(true)}
           className="
