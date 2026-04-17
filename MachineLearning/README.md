@@ -6,7 +6,6 @@ In the terminal, make sure you are in the Machine Learning Folder:
 cd /Documents/Github/INIT-Hardware-Build-Spring-2026/MachineLearning
 ``` 
 
-
 Using a virtual environment:
 
 In the command line, run the following commands:
@@ -34,7 +33,7 @@ How to run the server
 uvicorn api:app --reload --host 0.0.0.0 --port 8000
 ```
 
-
+# Different approach for creating a virtual environment using conda
 
 For creating a conda virtual environment
 ```bash
@@ -50,7 +49,7 @@ to deactivate this virtual environment
 conda  deactivate 
 ```
 
-In the terminal for running the firmware
+In another terminal for running the firmware, run the following commands
 ```bash
 cd INIT-Hardware-Build-Spring-2026/Firmware/src/components/Init-Firmware
 npm install
