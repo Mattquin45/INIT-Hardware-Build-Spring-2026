@@ -10,42 +10,21 @@ const languages = {
     // ko: "Korean",
     it: "Italian",
     de: "German",
-    el: "Greek",
-    ru: "Russian",
-    ar: "Arabic",
-    ur: "Urdu",
-    hi: "Hindi",
+    // el: "Greek",
+    // ru: "Russian",
+    // ar: "Arabic",
+    // ur: "Urdu",
+    // hi: "Hindi",
     ht: "Haitian Creole",
     pt: "Portuguese",
     ro: "Romanian",
-    fa: "Persian",
+    // fa: "Persian",
 };
 
 // Change to work 
 const API_BASE_URL = 'http://localhost:8000';
 
 function Drop() {
-    
-//     const [targetLanguage, setTargetLanguage] = useState("en"); // default to English
-
-//     const selectLanguage = (langId) => {
-//      setTargetLanguage(langId); 
-//     };
-
-//     const[open, setOpen] = useState(false);
-//     const [settings, setSettings] = useState({
-//     online: false,
-//     en: false,
-//     es: false,
-//   });
-
-//     function toggleMenu(){
-//         setOpen(!open);
-//     }
-//     const toggleSetting = (langId) => {
-//     setSettings((prev) => ({ ...prev, [langId]: !prev[langId] }));
-//   };
-
     const [targetLanguage, setTargetLanguage] = useState("en");
     const [open, setOpen] = useState(false);
     const [settings, setSettings] = useState({
@@ -62,7 +41,7 @@ function Drop() {
         try {
           console.log('Fetching language settings from FastAPI...');
           const response = await fetch(`${API_BASE_URL}/api/language`, {
-            credentials: 'include', // Important for cookies
+            credentials: 'include',
           });
           
           if (!response.ok) {
@@ -114,17 +93,12 @@ function Drop() {
         const data = await response.json();
         console.log('Language updated successfully:', data);
         
-        // You can add a success indicator here
-        // showToast(`Language changed to ${data.languageName}`, 'success');
-        
       } catch (err) {
         console.error('Error updating language:', err);
         setError(err.message || 'Failed to update language. Please try again.');
-        // Revert the language selection on error
         setTargetLanguage(previousLanguage);
       } finally {
         setIsLoading(false);
-        // Auto-clear error after 3 seconds
         setTimeout(() => setError(null), 3000);
       }
     };
@@ -137,7 +111,6 @@ function Drop() {
       const newSettings = { ...settings, [langId]: !settings[langId] };
       setSettings(newSettings);
       
-      // Update settings via API
       try {
         await fetch(`${API_BASE_URL}/api/settings`, {
           method: 'POST',
@@ -153,14 +126,14 @@ function Drop() {
     };
 
     return(
-        <div className = "drop">
-            <button onClick = {toggleMenu} className = "menu-button">
-                ⚙️
+        <div className="drop">
+            <button onClick={toggleMenu} className="menu-button">
+                ⚙️ Settings
             </button>
 
             <nav>
                 <ul className={`dropdown ${open ? "active" : ""}`}>
-                        <li className="setting-item">
+                    <li className="setting-item online-toggle">
                         <label className="switch">
                             <input 
                                 type="checkbox"
@@ -169,26 +142,35 @@ function Drop() {
                             />
                             <span className="slider"></span>
                         </label>
-                        <span>{settings.online ? "Online" : "Offline"}</span>
+                        <span>{settings.online ? "🌐 Online Mode" : "📴 Offline Mode"}</span>
                     </li>
-                    {Object.entries(languages).map(([id, name]) => (
-                    <li key={id} className="setting-item">
-                        <label className="switch">
-                        <input
-                            type="radio"
-                            name="language"
-                            checked={targetLanguage === id}
-                            onChange={() => selectLanguage(id)}
-                        />
-                        <span className="slider"></span>
-                        </label>
-                        <span>{name}</span>
-                    </li>
-                ))}
-                     
+                    
+                    <li className="dropdown-divider">🌍 Select Language</li>
+                    
+                    <div className="language-grid">
+                        {Object.entries(languages).map(([id, name]) => (
+                            <li key={id} className="setting-item language-item">
+                                <label className="switch">
+                                    <input
+                                        type="radio"
+                                        name="language"
+                                        checked={targetLanguage === id}
+                                        onChange={() => selectLanguage(id)}
+                                        disabled={isLoading}
+                                    />
+                                    <span className="slider"></span>
+                                </label>
+                                <span className={`language-name ${targetLanguage === id ? 'active-language' : ''}`}>
+                                    {name}
+                                </span>
+                            </li>
+                        ))}
+                    </div>
+                    
+                    {error && <li className="error-message">{error}</li>}
+                    {isLoading && <li className="loading-message">Updating language...</li>}
                 </ul>
             </nav>
-            
         </div>
     );
 }
