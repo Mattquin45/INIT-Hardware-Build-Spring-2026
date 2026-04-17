@@ -21,7 +21,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from ultralytics import YOLO
 
-MODEL_PATH = os.getenv("MODEL_PATH", "MachineLearning/yolov8n.pt")
+MODEL_PATH = os.getenv("MODEL_PATH", "yolov8n.pt")
 CAMERA_INDEX = int(os.getenv("CAMERA_INDEX", "0"))
 
 app = FastAPI()
@@ -36,10 +36,37 @@ app.add_middleware(
 model = YOLO(MODEL_PATH)
 
 
+import time
+import subprocess
+import sys
+process = None
+
+@app.get("/start-scan")
+def start_scan(lang: str = "es"):
+    global process
+    try:
+        if process:
+            process.terminate()
+            process.wait()  # 🔥 important
+
+        process = subprocess.Popen([
+            "/Users/Student/.pyenv/versions/3.11.8/bin/python3",
+            "webcam_tester_google.py",  
+            "yolov8n.pt",
+            lang
+        ])
+
+        print(f"Started YOLO with language: {lang}")  # debug
+
+        return {"status": "started", "language": lang}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 def _capture_frame():
     cap = cv2.VideoCapture(CAMERA_INDEX)
     if not cap.isOpened():
         raise RuntimeError(f"Cannot open camera index {CAMERA_INDEX}.")
+    time.sleep(0.5)  
     ret, frame = cap.read()
     cap.release()
     if not ret:

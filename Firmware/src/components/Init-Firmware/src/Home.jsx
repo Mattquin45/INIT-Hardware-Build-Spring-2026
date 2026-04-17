@@ -1,10 +1,36 @@
 import camera from "./assets/Camera.png";
 import hotpotato from "./assets/HotPotato.png";
 import map from "./assets/Map.png";
+import { useState, useEffect } from "react";
+import Drop from "./Drop";
+
+useEffect(() => {
+  const startScan = async () => {
+    try {
+      await fetch(`http://localhost:8000/start-scan?lang=${language}`);
+    } catch (err) {
+      console.log("Server error");
+    }
+  };
+
+  startScan();
+}, [language]); 
+
 
 export default function Home() {
+  //Use state change is hardcoded language change
+   const [language, setLanguage] = useState("es");
+
+  const handleScan = async () => {
+    try {
+      await fetch(`http://localhost:8000/start-scan?lang=${language}`);
+    } catch (err) {
+      alert("Could not reach the ML server. Is uvicorn running?");
+    }
+  };
   return (
     <div className="flex flex-col items-center justify-center h-screen">
+      <Drop onLanguageChange={setLanguage} />
 
       <h1 className="text-4xl font-bold mb-20 text-gray-700 -translate-y-16">
         
@@ -13,7 +39,7 @@ export default function Home() {
       <div className="flex gap-10 items-end">
 
         <button
-          onClick={() => alert("APP numero uno Scan translate thing")}
+          onClick={handleScan}
           className="
             w-60 h-60 rounded-full
             bg-gradient-to-br from-blue-200 to-blue-700
